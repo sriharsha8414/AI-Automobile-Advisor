@@ -1,9 +1,9 @@
 import os
-import streamlit as st
 import datetime
-import re
+import streamlit as st
+from ml_engine import generate_response, VEHICLES
 
-st.set_page_config(page_title="AutoMatch Chatbot", page_icon="🚗", layout="centered")
+st.set_page_config(page_title="AutoMatch Chatbot", page_icon="🚗", layout="wide")
 
 # ---------------------------------------------------------------------------
 # Custom Gamer Tech Red & Black CSS Styling
@@ -11,10 +11,11 @@ st.set_page_config(page_title="AutoMatch Chatbot", page_icon="🚗", layout="cen
 GAMER_THEME_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
 
 /* Main App & Sidebar Gamified Styling */
-html, body, [class*="css"] {
-    font-family: 'Share Tech Mono', monospace;
+html, body, .stApp, [class*="css"] {
+    font-family: 'Share Tech Mono', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'EmojiOne Color', monospace, sans-serif;
     background-color: #050507 !important;
     color: #E2E8F0 !important;
 }
@@ -206,6 +207,16 @@ div.stButton > button:active {
 .pros-list { color: #00FF87; }
 .cons-list { color: #FF3366; }
 
+.pros-list i, .cons-list i {
+    margin-right: 6px;
+    width: 16px;
+    text-align: center;
+}
+
+.icon-glow {
+    filter: drop-shadow(0 0 4px currentColor);
+}
+
 /* Driving Track Gaming Animation */
 .driving-track-container {
     background: rgba(255, 0, 85, 0.02);
@@ -287,102 +298,11 @@ div.stButton > button:active {
 st.markdown(GAMER_THEME_CSS, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Offline Vehicle Database
-# ---------------------------------------------------------------------------
-VEHICLES = {
-    "Two Wheeler": [
-        {
-            "name": "Ola S1 Pro (EV)",
-            "price": "₹1.40 Lakh",
-            "budget_val": 1.4,
-            "type": "EV Scooter",
-            "pros": "Great range (195 km), loaded with tech features, fast acceleration.",
-            "cons": "Panel gaps in some batches, software bugs occasionally."
-        },
-        {
-            "name": "TVS Raider 125",
-            "price": "₹95,000",
-            "budget_val": 0.95,
-            "type": "Commuter Bike",
-            "pros": "Stylish design, excellent mileage (60+ kmpl), digital console.",
-            "cons": "Rear tyre grip could be better, soft suspension for high speeds."
-        },
-        {
-            "name": "Royal Enfield Classic 350",
-            "price": "₹1.93 - ₹2.24 Lakh",
-            "budget_val": 2.1,
-            "type": "Cruiser Bike",
-            "pros": "Timeless retro design, heavy thumping engine, very comfortable cruising.",
-            "cons": "Heavy weight (195 kg), lacks modern features like LED headlamps."
-        },
-        {
-            "name": "Yamaha R15 V4",
-            "price": "₹1.82 Lakh",
-            "budget_val": 1.82,
-            "type": "Sports Bike",
-            "pros": "Exceptional track handling, high-revving engine, premium looks.",
-            "cons": "Aggressive committed riding posture (causes wrist pain in traffic)."
-        },
-        {
-            "name": "Honda Activa 6G",
-            "price": "₹76,000",
-            "budget_val": 0.76,
-            "type": "Scooter",
-            "pros": "Highly reliable engine, solid metal body, great resale value.",
-            "cons": "Telescopic suspension only in higher variants, outdated digital console."
-        }
-    ],
-    "Four Wheeler": [
-        {
-            "name": "Tata Nexon",
-            "price": "₹8.10 - ₹15.50 Lakh",
-            "budget_val": 11.0,
-            "type": "Compact SUV",
-            "pros": "5-star Global NCAP safety rating, spacious cabin, comfortable ride.",
-            "cons": "AMT transmission can feel jerky, infotainment UI feels slightly laggy."
-        },
-        {
-            "name": "Maruti Suzuki Swift",
-            "price": "₹6.49 - ₹9.64 Lakh",
-            "budget_val": 8.0,
-            "type": "Hatchback",
-            "pros": "Extremely fuel-efficient (24+ kmpl), easy to drive in traffic, low maintenance.",
-            "cons": "Build quality is lightweight, cabin noise at high speeds."
-        },
-        {
-            "name": "Mahindra XUV700",
-            "price": "₹13.99 - ₹26.99 Lakh",
-            "budget_val": 20.0,
-            "type": "Mid-size SUV",
-            "pros": "Powerful petrol/diesel engines, ADAS safety tech, premium dual-screen setup.",
-            "cons": "Long waiting periods, heavy footprint in tight city parking."
-        },
-        {
-            "name": "Hyundai Creta",
-            "price": "₹11.00 - ₹20.15 Lakh",
-            "budget_val": 15.0,
-            "type": "SUV",
-            "pros": "Feature loaded (panoramic sunroof, ventilated seats), smooth ride quality.",
-            "cons": "Polarizing exterior design, safety rating is average compared to Tata."
-        },
-        {
-            "name": "Tata Tiago EV",
-            "price": "₹7.99 - ₹11.89 Lakh",
-            "budget_val": 9.5,
-            "type": "EV Hatchback",
-            "pros": "Most affordable full-size EV, silent cabin, low running cost.",
-            "cons": "Real-world range is around 180-200 km (less than advertised 250-315 km)."
-        }
-    ]
-}
-
-# ---------------------------------------------------------------------------
 # Session state defaults
 # ---------------------------------------------------------------------------
 for key, default in (
     ("messages", []),
     ("history", []),
-    ("quick_pick", ""),
 ):
     if key not in st.session_state:
         st.session_state[key] = default
@@ -390,7 +310,7 @@ for key, default in (
 # ---------------------------------------------------------------------------
 # Sidebar – Configuration & Vehicle Type Preference
 # ---------------------------------------------------------------------------
-st.sidebar.header("🔧 Configuration")
+st.sidebar.markdown('<h2 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-cog"></i> Configuration</h2>', unsafe_allow_html=True)
 
 vehicle_pref = st.sidebar.radio(
     "Vehicle Preference",
@@ -400,14 +320,28 @@ vehicle_pref = st.sidebar.radio(
 
 clean_pref = vehicle_pref.replace("🏍️ ", "").replace("🚗 ", "")
 
-_GREETING = (
-    f"Hello! I'm your AutoMatch {clean_pref} Advisor. What kind of vehicle are you looking "
-    f"to buy today, and what is your budget?"
+_GREETING_TW = (
+    "Hello! I'm your AutoMatch **Two Wheeler** Advisor.\n\n"
+    "💡 **Try asking:**\n"
+    "- Scooter under ₹1 lakh\n"
+    "- Best sports bike\n"
+    "- EV vs Petrol comparison\n"
+    "- Reliable daily commuter"
 )
+_GREETING_FW = (
+    "Hello! I'm your AutoMatch **Four Wheeler** Advisor.\n\n"
+    "💡 **Try asking:**\n"
+    "- SUV under ₹15 lakh\n"
+    "- Best hatchback\n"
+    "- EV vs Petrol comparison\n"
+    "- Family car with good safety"
+)
+
+greeting = _GREETING_TW if clean_pref == "Two Wheeler" else _GREETING_FW
 
 if not st.session_state.messages:
     st.session_state.messages = [
-        {"role": "assistant", "text": _GREETING}
+        {"role": "assistant", "text": greeting}
     ]
 
 if "prev_vehicle_pref" not in st.session_state:
@@ -418,7 +352,7 @@ if clean_pref != st.session_state.prev_vehicle_pref:
     has_user_msg = any(m["role"] == "user" for m in st.session_state.messages)
     if not has_user_msg:
         st.session_state.messages = [
-            {"role": "assistant", "text": _GREETING}
+            {"role": "assistant", "text": greeting}
         ]
         st.rerun()
 
@@ -426,7 +360,7 @@ if clean_pref != st.session_state.prev_vehicle_pref:
 # Sidebar – History Section
 # ---------------------------------------------------------------------------
 st.sidebar.markdown("---")
-st.sidebar.subheader("📜 Chat History")
+st.sidebar.markdown('<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-history"></i> Chat History</h3>', unsafe_allow_html=True)
 
 if len(st.session_state.messages) > 1:
     if st.sidebar.button("💾 Save Chat to History", use_container_width=True):
@@ -461,14 +395,12 @@ else:
 if len(st.session_state.messages) > 1:
     st.sidebar.markdown("---")
     if st.sidebar.button("🗑️ Clear Current Chat", use_container_width=True):
-        st.session_state.messages = [{"role": "assistant", "text": _GREETING}]
-        st.session_state.quick_pick = ""
-        st.rerun()
+        st.session_state.messages = [{"role": "assistant", "text": _GREETING_TW if clean_pref == "Two Wheeler" else _GREETING_FW}]
 
 # ---------------------------------------------------------------------------
 # Interactive Gamer Track Animation (At the top of the chat area)
 # ---------------------------------------------------------------------------
-vehicle_emoji = "🏍️" if clean_pref == "Two Wheeler" else "🚗"
+vehicle_icon = '<i class="fas fa-motorcycle"></i>' if clean_pref == "Two Wheeler" else '<i class="fas fa-car"></i>'
 track_label = f"SYSTEM SCANNING: {clean_pref.upper()} INTERFACE"
 
 st.markdown(
@@ -476,7 +408,7 @@ st.markdown(
     <div class="driving-track-container">
         <div class="scanner-text">{track_label}</div>
         <div class="driving-track">
-            <div class="driving-vehicle">{vehicle_emoji}</div>
+            <div class="driving-vehicle">{vehicle_icon}</div>
         </div>
     </div>
     """,
@@ -484,112 +416,9 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# Offline AI Matchmaking Logic (Generates Laser-Scanned Cards)
+# AI logic imported from ml_engine.py (generate_response, VEHICLES)
 # ---------------------------------------------------------------------------
-def generate_response(user_input, pref):
-    text = user_input.lower()
-    
-    if text.strip() in ("hi", "hello", "hey", "hola", "greetings"):
-        return f"Hello! How can I help you find the perfect {pref} today? Tell me your budget or preferences."
-        
-    if any(kw in text for kw in ("ev vs", "versus", "comparison", "petrol vs", "electric vs")):
-        return (
-            "### 💰 EV vs Petrol Comparison\n\n"
-            "<table class='ev-comparison-table'>"
-            "<tr><th>Feature</th><th>EV (Electric Vehicle)</th><th>Petrol Vehicle</th></tr>"
-            "<tr><td><b>Initial Cost</b></td><td>Higher upfront purchase price</td><td>Lower initial cost</td></tr>"
-            "<tr><td><b>Running Cost</b></td><td>Extremely low (~₹0.5 - ₹1 per km)</td><td>Higher (~₹6 - ₹9 per km)</td></tr>"
-            "<tr><td><b>Maintenance</b></td><td>Minimal (no engine oil, fewer parts)</td><td>Regular servicing (filters, plugs, oil)</td></tr>"
-            "<tr><td><b>Convenience</b></td><td>Needs regular charging</td><td>Refuel in 2 mins anywhere</td></tr>"
-            "</table>"
-            "**Recommendation:** Buy an **EV** if your daily run is >40 km inside the city. Choose **Petrol** if you do frequent long highway runs."
-        )
-
-    numbers = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-    budget = None
-    if numbers:
-        try:
-            budget = float(numbers[0])
-            if budget > 1000:
-                budget = budget / 100000.0
-        except ValueError:
-            pass
-
-    candidates = VEHICLES[pref]
-    matched = []
-    
-    if budget:
-        for v in candidates:
-            if v["budget_val"] <= budget * 1.25:
-                matched.append(v)
-        matched.sort(key=lambda x: abs(x["budget_val"] - budget))
-    
-    filtered_by_type = []
-    for keyword in ("ev", "suv", "scooter", "bike", "hatchback", "cruiser"):
-        if keyword in text:
-            target_list = matched if matched else candidates
-            filtered_by_type = [v for v in target_list if keyword in v["type"].lower() or keyword in v["name"].lower()]
-            break
-            
-    if filtered_by_type:
-        matched = filtered_by_type
-
-    if not matched:
-        matched = candidates[:3]
-
-    res = f"### 🚗 AutoMatch Advisor Recommendations ({pref})\n\n"
-    if budget:
-        res += f"Here are the best options matching your budget of **~₹{budget:.2f} Lakh**:\n\n"
-    elif filtered_by_type:
-        res += "Here are the best options matching your preference:\n\n"
-    else:
-        res += "Here are our top recommended options for you:\n\n"
-
-    for v in matched:
-        res += f"""
-        <div class="vehicle-card">
-            <div class="vehicle-header">
-                <h4 class="vehicle-name">{v['name']}</h4>
-                <span class="vehicle-tag">{v['type']}</span>
-            </div>
-            <div class="vehicle-price">Estimated Price: <b>{v['price']}</b></div>
-            <div class="pros-list"><b>✅ PROS:</b> {v['pros']}</div>
-            <div class="cons-list"><b>❌ CONS:</b> {v['cons']}</div>
-        </div>
-        """
-
-    res += "\n\n---\n"
-    res += "*Would you like to adjust your budget, or get details on a specific model listed above?*"
-    return res
-
-# ---------------------------------------------------------------------------
-# Quick-action suggestion chips (before any user message)
-# ---------------------------------------------------------------------------
-has_user_msg = any(m["role"] == "user" for m in st.session_state.messages)
-
-if not has_user_msg:
-    st.markdown("**Quick start – tap a suggestion:**")
-    cols = st.columns(3)
-    if clean_pref == "Two Wheeler":
-        suggestions = [
-            "🏍️ Best 2-wheeler under ₹1.5L",
-            "🛵 Reliable daily scooter",
-            "💰 EV vs Petrol comparison",
-        ]
-    else:
-        suggestions = [
-            "🚗 Family SUV for ₹10-15L",
-            "⚡ EV options under ₹10L",
-            "💰 EV vs Petrol comparison",
-        ]
-        
-    for col, suggestion in zip(cols, suggestions):
-        if col.button(suggestion, use_container_width=True):
-            st.session_state.quick_pick = suggestion
-            st.rerun()
-
-# ---------------------------------------------------------------------------
-# Display chat history
+# Display chat history (always first in widget order)
 # ---------------------------------------------------------------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -599,30 +428,12 @@ for msg in st.session_state.messages:
             st.markdown(msg["text"])
 
 # ---------------------------------------------------------------------------
-# Input handling
+# Input handling (always last in widget order - fixed position)
 # ---------------------------------------------------------------------------
-user_input = None
-
-if st.session_state.quick_pick:
-    user_input = st.session_state.quick_pick
-    st.session_state.quick_pick = ""
-
-if user_input is None:
-    user_input = st.chat_input("Ask for advice or tell me your budget and preferences...")
+user_input = st.chat_input("Ask for advice or tell me your budget and preferences...")
 
 if user_input:
+    output = generate_response(user_input, clean_pref)
     st.session_state.messages.append({"role": "user", "text": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Analyzing recommendations..."):
-            output = generate_response(user_input, clean_pref)
-            if "<div" in output or "<table" in output:
-                st.markdown(output, unsafe_allow_html=True)
-            else:
-                st.markdown(output)
-            st.session_state.messages.append(
-                {"role": "assistant", "text": output}
-            )
-            st.rerun()
+    st.session_state.messages.append({"role": "assistant", "text": output})
+    st.rerun()
