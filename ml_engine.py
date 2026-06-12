@@ -1,4 +1,72 @@
 import re
+import json
+import requests
+
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3"
+
+def is_ollama_available():
+    try:
+        r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
+        return r.status_code == 200
+    except:
+        return False
+
+def build_ollama_system_prompt(pref, lang, user_info=None, matched_vehicles=None):
+    prompt = f"""You are AutoMatch Advisor, an AI vehicle recommendation assistant. You help users find the perfect vehicle (Two Wheeler or Four Wheeler) in India.
+
+Current settings:
+- Vehicle Preference: {pref}
+- Language: {lang}
+"""
+    if user_info and user_info.get("name"):
+        prompt += f"""
+User Info:
+- Name: {user_info.get('name', 'N/A')}
+- Phone: {user_info.get('phone', 'N/A')}
+- Vehicle Preference: {user_info.get('vehicle_type', 'N/A')}
+- Fuel Preference: {user_info.get('fuel_type', 'N/A')}
+"""
+    if matched_vehicles:
+        prompt += "\nMatching vehicles from database:\n"
+        for v in matched_vehicles:
+            prompt += f"- {v['name']}: {v['price']}, Type: {v['type']}, Pros: {v['pros']}, Cons: {v['cons']}\n"
+    else:
+        prompt += "\nAvailable vehicles:\n"
+        for v in VEHICLES.get(pref, []):
+            prompt += f"- {v['name']}: {v['price']}, Type: {v['type']}\n"
+
+    prompt += """
+
+Response guidelines:
+1. Be conversational, friendly, and helpful like ChatGPT
+2. If language is 'hi', respond in Hindi. If 'te', respond in Telugu. Otherwise English.
+3. When recommending vehicles, mention their pros, cons, and price clearly
+4. Ask follow-up questions to understand user needs better
+5. Keep responses concise but informative
+6. Use bullet points for lists"""
+    return prompt
+
+def ollama_chat(messages, timeout=180):
+    try:
+        payload = {
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0.7, "num_predict": 1024}
+        }
+        r = requests.post(
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json=payload,
+            timeout=timeout
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("message", {}).get("content", "")
+        return None
+    except Exception as e:
+        print(f"Ollama error: {e}")
+        return None
 
 VEHICLES = {
     "Two Wheeler": [
@@ -323,9 +391,26 @@ def get_greeting(pref, lang="en"):
             return "Hello! I'm your AutoMatch **Two Wheeler** Advisor.\n\n💡 **Try asking:**\n- Scooter under ₹1 lakh\n- Best sports bike\n- EV vs Petrol comparison\n- Reliable daily commuter"
         return "Hello! I'm your AutoMatch **Four Wheeler** Advisor.\n\n💡 **Try asking:**\n- SUV under ₹15 lakh\n- Best hatchback\n- EV vs Petrol comparison\n- Family car with good safety"
 
-def generate_response(user_input, pref, lang="en", user_info=None):
+def generate_response(user_input, pref, lang="en", user_info=None, ai_mode="rule"):
     text = user_input.strip()
     text_lower = text.lower()
+
+    if ai_mode == "ollama":
+        budget = parse_budget(text_lower)
+        filters = get_vehicle_filters(text_lower)
+        matched = recommend_vehicles(pref, budget, filters)
+
+        system_prompt = build_ollama_system_prompt(pref, lang, user_info, matched)
+        ollama_messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        ollama_messages.append({"role": "user", "content": user_input})
+        response = ollama_chat(ollama_messages)
+        if response:
+            return response
+        fallback = format_recommendation(matched, pref, budget, filters, lang)
+        return f"{fallback}\n\n---\n*Note: Ollama is not responding. Showing rule-based recommendations.*"
 
     intent = detect_intent(text_lower)
 

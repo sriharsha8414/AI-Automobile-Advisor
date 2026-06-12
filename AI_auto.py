@@ -1,7 +1,7 @@
 import os
 import datetime
 import streamlit as st
-from ml_engine import generate_response, VEHICLES, get_greeting, TRANSLATIONS
+from ml_engine import generate_response, VEHICLES, get_greeting, TRANSLATIONS, is_ollama_available
 
 st.set_page_config(page_title="AutoMatch AI Advisor", page_icon="🚗", layout="wide")
 
@@ -292,6 +292,7 @@ for key, default in (
     ("lang", "en"),
     ("user_info", {}),
     ("user_registered", False),
+    ("ai_mode", "rule"),
 ):
     if key not in st.session_state:
         st.session_state[key] = default
@@ -314,6 +315,27 @@ if selected_lang != st.session_state.get("lang"):
         )
         st.session_state.messages = [{"role": "assistant", "text": greeting}]
         st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-microchip"></i> AI Engine</h3>', unsafe_allow_html=True)
+
+ollama_status = is_ollama_available()
+ollama_label = "Ollama: Connected" if ollama_status else "Ollama: Not Connected"
+st.sidebar.caption(f"{'🟢' if ollama_status else '🔴'} {ollama_label}")
+
+ai_options = ["⚡ Quick (Rule-based)", "🤖 AI (Ollama)"]
+ai_mode_labels = ["rule", "ollama"]
+if not ollama_status and len(ai_options) > 1:
+    ai_options = ["⚡ Quick (Rule-based)"]
+    ai_mode_labels = ["rule"]
+
+selected_ai = st.sidebar.radio(
+    "Response Mode" if selected_lang == "en" else ("प्रतिक्रिया मोड" if selected_lang == "hi" else "ప్రతిస్పందన మోడ్"),
+    options=ai_options,
+    index=0
+)
+selected_ai_mode = ai_mode_labels[ai_options.index(selected_ai)] if selected_ai in ai_options else "rule"
+st.session_state.ai_mode = selected_ai_mode
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-user"></i> User Registration</h3>', unsafe_allow_html=True)
@@ -474,7 +496,12 @@ user_input = st.chat_input("Ask for advice or tell me your budget and preference
 
 if user_input:
     user_info = st.session_state.get("user_info")
-    output = generate_response(user_input, clean_pref, selected_lang, user_info)
+    ai_mode = st.session_state.get("ai_mode", "rule")
+    if ai_mode == "ollama":
+        with st.spinner("🤖 AI is thinking..." if selected_lang == "en" else ("🤖 AI सोच रहा है..." if selected_lang == "hi" else "🤖 AI ఆలోచిస్తోంది...")):
+            output = generate_response(user_input, clean_pref, selected_lang, user_info, ai_mode)
+    else:
+        output = generate_response(user_input, clean_pref, selected_lang, user_info, ai_mode)
     st.session_state.messages.append({"role": "user", "text": user_input})
     st.session_state.messages.append({"role": "assistant", "text": output})
     st.rerun()
