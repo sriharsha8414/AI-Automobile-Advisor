@@ -1,26 +1,23 @@
 import os
 import datetime
 import streamlit as st
-from ml_engine import generate_response, VEHICLES
+from ml_engine import generate_response, VEHICLES, get_greeting, TRANSLATIONS
 
-st.set_page_config(page_title="AutoMatch Chatbot", page_icon="🚗", layout="wide")
+st.set_page_config(page_title="AutoMatch AI Advisor", page_icon="🚗", layout="wide")
 
-# ---------------------------------------------------------------------------
-# Custom Gamer Tech Red & Black CSS Styling
-# ---------------------------------------------------------------------------
+LANG_OPTIONS = {"English": "en", "हिन्दी (Hindi)": "hi", "తెలుగు (Telugu)": "te"}
+
 GAMER_THEME_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&display=swap');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
 
-/* Main App & Sidebar Gamified Styling */
 html, body, .stApp, [class*="css"] {
     font-family: 'Share Tech Mono', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'EmojiOne Color', monospace, sans-serif;
     background-color: #050507 !important;
     color: #E2E8F0 !important;
 }
 
-/* Page Entrance Animation */
 @keyframes fadeInApp {
     from { opacity: 0; filter: blur(5px); }
     to { opacity: 1; filter: blur(0); }
@@ -30,7 +27,6 @@ html, body, .stApp, [class*="css"] {
     animation: fadeInApp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Neon Red Title Header */
 h1 {
     font-family: 'Orbitron', sans-serif !important;
     font-weight: 900 !important;
@@ -48,7 +44,6 @@ h1 {
     100% { filter: drop-shadow(0 0 12px rgba(255, 0, 85, 0.6)); }
 }
 
-/* Chat Input Gaming Style */
 div[data-testid="stChatInput"] {
     border: 2px solid #FF0055 !important;
     border-radius: 8px !important;
@@ -62,7 +57,6 @@ div[data-testid="stChatInput"]:focus-within {
     box-shadow: 0 0 20px rgba(255, 0, 85, 0.4) !important;
 }
 
-/* Chat Message styling as Cyber Terminal Cards */
 @keyframes terminalSlide {
     from { opacity: 0; transform: translateX(-15px); }
     to { opacity: 1; transform: translateX(0); }
@@ -84,7 +78,6 @@ div[data-testid="stChatMessage"]:hover {
     transform: translateY(-1px);
 }
 
-/* Gamer Sidebar styling */
 section[data-testid="stSidebar"] {
     background-color: #050507 !important;
     border-right: 2px solid #FF0055 !important;
@@ -97,7 +90,6 @@ section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
     text-transform: uppercase;
 }
 
-/* Neo-Gamer Buttons (Black & Red neon transitions) */
 div.stButton > button {
     background: #0E0E12 !important;
     border: 1px solid #FF0055 !important;
@@ -122,7 +114,6 @@ div.stButton > button:active {
     transform: translateY(0px) !important;
 }
 
-/* Laser-Scanned Vehicle Cards */
 @keyframes laserScan {
     0% { top: 0%; opacity: 0; }
     10% { opacity: 1; }
@@ -217,7 +208,6 @@ div.stButton > button:active {
     filter: drop-shadow(0 0 4px currentColor);
 }
 
-/* Driving Track Gaming Animation */
 .driving-track-container {
     background: rgba(255, 0, 85, 0.02);
     border: 1px solid rgba(255, 0, 85, 0.15);
@@ -267,7 +257,6 @@ div.stButton > button:active {
     100% { left: 100%; transform: scaleX(1); }
 }
 
-/* Comparison sheet table updates */
 .ev-comparison-table {
     width: 100%;
     border-collapse: collapse;
@@ -297,47 +286,103 @@ div.stButton > button:active {
 """
 st.markdown(GAMER_THEME_CSS, unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Session state defaults
-# ---------------------------------------------------------------------------
 for key, default in (
     ("messages", []),
     ("history", []),
+    ("lang", "en"),
+    ("user_info", {}),
+    ("user_registered", False),
 ):
     if key not in st.session_state:
         st.session_state[key] = default
 
-# ---------------------------------------------------------------------------
-# Sidebar – Configuration & Vehicle Type Preference
-# ---------------------------------------------------------------------------
 st.sidebar.markdown('<h2 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-cog"></i> Configuration</h2>', unsafe_allow_html=True)
 
+selected_lang_display = st.sidebar.selectbox(
+    "Language / भाषा / భాష",
+    options=list(LANG_OPTIONS.keys()),
+    index=0
+)
+selected_lang = LANG_OPTIONS[selected_lang_display]
+
+if selected_lang != st.session_state.get("lang"):
+    st.session_state.lang = selected_lang
+    if not any(m["role"] == "user" for m in st.session_state.messages):
+        greeting = get_greeting(
+            "Two Wheeler" if st.session_state.get("prev_vehicle_pref", "Two Wheeler") == "Two Wheeler" else "Four Wheeler",
+            selected_lang
+        )
+        st.session_state.messages = [{"role": "assistant", "text": greeting}]
+        st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-user"></i> User Registration</h3>', unsafe_allow_html=True)
+
+if not st.session_state.user_registered:
+    with st.sidebar.form("user_registration_form"):
+        name = st.text_input("Full Name" if selected_lang == "en" else ("पूरा नाम" if selected_lang == "hi" else "పూర్తి పేరు"))
+        phone = st.text_input("Phone Number" if selected_lang == "en" else ("फ़ोन नंबर" if selected_lang == "hi" else "ఫోన్ నంబర్"))
+        vehicle_type = st.selectbox(
+            "Vehicle Type" if selected_lang == "en" else ("वाहन प्रकार" if selected_lang == "hi" else "వాహనం రకం"),
+            options=["Two Wheeler", "Four Wheeler"]
+        )
+        fuel_type = st.selectbox(
+            "Fuel Type" if selected_lang == "en" else ("ईंधन प्रकार" if selected_lang == "hi" else "ఇంధన రకం"),
+            options=["Petrol", "Diesel", "Electric", "Hybrid"]
+        )
+        submitted = st.form_submit_button(
+            "Register" if selected_lang == "en" else ("पंजीकरण करें" if selected_lang == "hi" else "నమోదు చేయండి"),
+            use_container_width=True
+        )
+        if submitted and name and phone:
+            st.session_state.user_info = {
+                "name": name,
+                "phone": phone,
+                "vehicle_type": vehicle_type,
+                "fuel_type": fuel_type,
+            }
+            st.session_state.user_registered = True
+            if selected_lang == "hi":
+                msg = f"स्वागत है, {name}! आपका फ़ोन नंबर {phone} दर्ज कर लिया गया है। आप {vehicle_type} और {fuel_type} में रुचि रखते हैं। मैं आपकी कैसे मदद कर सकता हूँ?"
+            elif selected_lang == "te":
+                msg = f"స్వాగతం, {name}! మీ ఫోన్ నంబర్ {phone} నమోదు చేయబడింది. మీరు {vehicle_type} మరియు {fuel_type} పై ఆసక్తి కలిగి ఉన్నారు. నేను మీకు ఎలా సహాయం చేయగలను?"
+            else:
+                msg = f"Welcome, {name}! Your phone number {phone} is registered. You're interested in {vehicle_type} with {fuel_type}. How can I help you today?"
+            st.session_state.messages.append({"role": "assistant", "text": msg})
+            st.rerun()
+        elif submitted:
+            if selected_lang == "hi":
+                st.error("कृपया नाम और फ़ोन नंबर भरें")
+            elif selected_lang == "te":
+                st.error("దయచేసి పేరు మరియు ఫోన్ నంబర్ నింపండి")
+            else:
+                st.error("Please fill in Name and Phone Number")
+else:
+    info = st.session_state.user_info
+    lang_text = {"en": "Registered User", "hi": "पंजीकृत उपयोगकर्ता", "te": "నమోదిత వినియోగదారు"}
+    st.sidebar.success(f"**{lang_text[selected_lang]}**")
+    st.sidebar.write(f"👤 {info.get('name', '')}")
+    st.sidebar.write(f"📞 {info.get('phone', '')}")
+    st.sidebar.write(f"🚗 {info.get('vehicle_type', '')}")
+    st.sidebar.write(f"⛽ {info.get('fuel_type', '')}")
+    if st.sidebar.button(
+        "Edit Info" if selected_lang == "en" else ("जानकारी संपादित करें" if selected_lang == "hi" else "సమాచారాన్ని సవరించండి"),
+        use_container_width=True
+    ):
+        st.session_state.user_registered = False
+        st.rerun()
+
+st.sidebar.markdown("---")
+
 vehicle_pref = st.sidebar.radio(
-    "Vehicle Preference",
+    "Vehicle Preference" if selected_lang == "en" else ("वाहन प्राथमिकता" if selected_lang == "hi" else "వాహన ప్రాధాన్యత"),
     options=["🏍️ Two Wheeler", "🚗 Four Wheeler"],
     index=0
 )
 
 clean_pref = vehicle_pref.replace("🏍️ ", "").replace("🚗 ", "")
 
-_GREETING_TW = (
-    "Hello! I'm your AutoMatch **Two Wheeler** Advisor.\n\n"
-    "💡 **Try asking:**\n"
-    "- Scooter under ₹1 lakh\n"
-    "- Best sports bike\n"
-    "- EV vs Petrol comparison\n"
-    "- Reliable daily commuter"
-)
-_GREETING_FW = (
-    "Hello! I'm your AutoMatch **Four Wheeler** Advisor.\n\n"
-    "💡 **Try asking:**\n"
-    "- SUV under ₹15 lakh\n"
-    "- Best hatchback\n"
-    "- EV vs Petrol comparison\n"
-    "- Family car with good safety"
-)
-
-greeting = _GREETING_TW if clean_pref == "Two Wheeler" else _GREETING_FW
+greeting = get_greeting(clean_pref, selected_lang)
 
 if not st.session_state.messages:
     st.session_state.messages = [
@@ -356,14 +401,12 @@ if clean_pref != st.session_state.prev_vehicle_pref:
         ]
         st.rerun()
 
-# ---------------------------------------------------------------------------
-# Sidebar – History Section
-# ---------------------------------------------------------------------------
 st.sidebar.markdown("---")
-st.sidebar.markdown('<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-history"></i> Chat History</h3>', unsafe_allow_html=True)
+st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-history"></i> Chat History</h3>', unsafe_allow_html=True)
 
 if len(st.session_state.messages) > 1:
-    if st.sidebar.button("💾 Save Chat to History", use_container_width=True):
+    save_text = "Save Chat to History" if selected_lang == "en" else ("चैट इतिहास में सहेजें" if selected_lang == "hi" else "చాట్ ను చరిత్రలో సేవ్ చేయండి")
+    if st.sidebar.button(f"💾 {save_text}", use_container_width=True):
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         first_query = "Vehicle Inquiry"
         for m in st.session_state.messages:
@@ -375,11 +418,11 @@ if len(st.session_state.messages) > 1:
             "messages": list(st.session_state.messages),
             "pref": clean_pref
         })
-        st.toast("Chat saved to history!")
+        st.toast("Chat saved to history!" if selected_lang == "en" else ("चैट सहेजा गया!" if selected_lang == "hi" else "చాట్ సేవ్ చేయబడింది!"))
         st.rerun()
 
 if st.session_state.history:
-    with st.sidebar.expander("📂 Saved Chats", expanded=True):
+    with st.sidebar.expander("Saved Chats" if selected_lang == "en" else ("सहेजे गए चैट" if selected_lang == "hi" else "సేవ్ చేసిన చాట్‌లు"), expanded=True):
         for idx, session in enumerate(st.session_state.history):
             col_load, col_del = st.columns([5, 1])
             if col_load.button(session["title"], key=f"load_{idx}", use_container_width=True):
@@ -390,18 +433,23 @@ if st.session_state.history:
                 st.session_state.history.pop(idx)
                 st.rerun()
 else:
-    st.sidebar.caption("No saved chats yet. Click 'Save Chat to History' above when chatting to save.")
+    no_chats_text = "No saved chats yet." if selected_lang == "en" else ("अभी तक कोई सहेजा गया चैट नहीं है।" if selected_lang == "hi" else "ఇంకా సేవ్ చేసిన చాట్‌లు లేవు.")
+    st.sidebar.caption(no_chats_text)
 
 if len(st.session_state.messages) > 1:
     st.sidebar.markdown("---")
-    if st.sidebar.button("🗑️ Clear Current Chat", use_container_width=True):
-        st.session_state.messages = [{"role": "assistant", "text": _GREETING_TW if clean_pref == "Two Wheeler" else _GREETING_FW}]
+    clear_text = "Clear Current Chat" if selected_lang == "en" else ("वर्तमान चैट साफ़ करें" if selected_lang == "hi" else "ప్రస్తుత చాట్‌ను క్లియర్ చేయండి")
+    if st.sidebar.button(f"🗑️ {clear_text}", use_container_width=True):
+        st.session_state.messages = [{"role": "assistant", "text": get_greeting(clean_pref, selected_lang)}]
+        st.rerun()
 
-# ---------------------------------------------------------------------------
-# Interactive Gamer Track Animation (At the top of the chat area)
-# ---------------------------------------------------------------------------
 vehicle_icon = '<i class="fas fa-motorcycle"></i>' if clean_pref == "Two Wheeler" else '<i class="fas fa-car"></i>'
-track_label = f"SYSTEM SCANNING: {clean_pref.upper()} INTERFACE"
+system_label = "SYSTEM SCANNING"
+if selected_lang == "hi":
+    system_label = "सिस्टम स्कैन कर रहा है"
+elif selected_lang == "te":
+    system_label = "సిస్టమ్ స్కాన్ చేస్తోంది"
+track_label = f"{system_label}: {clean_pref.upper()} INTERFACE"
 
 st.markdown(
     f"""
@@ -415,11 +463,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ---------------------------------------------------------------------------
-# AI logic imported from ml_engine.py (generate_response, VEHICLES)
-# ---------------------------------------------------------------------------
-# Display chat history (always first in widget order)
-# ---------------------------------------------------------------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if "<div" in msg["text"] or "<table" in msg["text"]:
@@ -427,13 +470,11 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["text"])
 
-# ---------------------------------------------------------------------------
-# Input handling (always last in widget order - fixed position)
-# ---------------------------------------------------------------------------
 user_input = st.chat_input("Ask for advice or tell me your budget and preferences...")
 
 if user_input:
-    output = generate_response(user_input, clean_pref)
+    user_info = st.session_state.get("user_info")
+    output = generate_response(user_input, clean_pref, selected_lang, user_info)
     st.session_state.messages.append({"role": "user", "text": user_input})
     st.session_state.messages.append({"role": "assistant", "text": output})
     st.rerun()
