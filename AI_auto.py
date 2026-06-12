@@ -2,6 +2,7 @@ import os
 import datetime
 import streamlit as st
 from ml_engine import generate_response, VEHICLES, get_greeting, TRANSLATIONS, is_ollama_available
+from i18n import tr
 
 st.set_page_config(page_title="AutoMatch AI Advisor", page_icon="🚗", layout="wide")
 
@@ -300,7 +301,7 @@ for key, default in (
 st.sidebar.markdown('<h2 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-cog"></i> Configuration</h2>', unsafe_allow_html=True)
 
 selected_lang_display = st.sidebar.selectbox(
-    "Language / भाषा / భాష",
+    tr("sidebar.language", selected_lang),
     options=list(LANG_OPTIONS.keys()),
     index=0
 )
@@ -320,17 +321,17 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-microchip"></i> AI Engine</h3>', unsafe_allow_html=True)
 
 ollama_status = is_ollama_available()
-ollama_label = "Ollama: Connected" if ollama_status else "Ollama: Not Connected"
+ollama_label = tr("sidebar.ollama_connected", selected_lang) if ollama_status else tr("sidebar.ollama_not_connected", selected_lang)
 st.sidebar.caption(f"{'🟢' if ollama_status else '🔴'} {ollama_label}")
 
-ai_options = ["⚡ Quick (Rule-based)", "🤖 AI (Ollama)"]
+ai_options = [f"⚡ {tr('sidebar.mode_rule', selected_lang)}", f"🤖 {tr('sidebar.mode_ollama', selected_lang)}"]
 ai_mode_labels = ["rule", "ollama"]
 if not ollama_status and len(ai_options) > 1:
     ai_options = ["⚡ Quick (Rule-based)"]
     ai_mode_labels = ["rule"]
 
 selected_ai = st.sidebar.radio(
-    "Response Mode" if selected_lang == "en" else ("प्रतिक्रिया मोड" if selected_lang == "hi" else "ప్రతిస్పందన మోడ్"),
+    tr("sidebar.response_mode", selected_lang),
     options=ai_options,
     index=0
 )
@@ -338,22 +339,22 @@ selected_ai_mode = ai_mode_labels[ai_options.index(selected_ai)] if selected_ai 
 st.session_state.ai_mode = selected_ai_mode
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-user"></i> User Registration</h3>', unsafe_allow_html=True)
+st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-user"></i> {tr("sidebar.user_registration", selected_lang)}</h3>', unsafe_allow_html=True)
 
 if not st.session_state.user_registered:
     with st.sidebar.form("user_registration_form"):
-        name = st.text_input("Full Name" if selected_lang == "en" else ("पूरा नाम" if selected_lang == "hi" else "పూర్తి పేరు"))
-        phone = st.text_input("Phone Number" if selected_lang == "en" else ("फ़ोन नंबर" if selected_lang == "hi" else "ఫోన్ నంబర్"))
+        name = st.text_input(tr("sidebar.full_name", selected_lang))
+        phone = st.text_input(tr("sidebar.phone_number", selected_lang))
         vehicle_type = st.selectbox(
-            "Vehicle Type" if selected_lang == "en" else ("वाहन प्रकार" if selected_lang == "hi" else "వాహనం రకం"),
+            tr("sidebar.vehicle_type", selected_lang),
             options=["Two Wheeler", "Four Wheeler"]
         )
         fuel_type = st.selectbox(
-            "Fuel Type" if selected_lang == "en" else ("ईंधन प्रकार" if selected_lang == "hi" else "ఇంధన రకం"),
+            tr("sidebar.fuel_type", selected_lang),
             options=["Petrol", "Diesel", "Electric", "Hybrid"]
         )
         submitted = st.form_submit_button(
-            "Register" if selected_lang == "en" else ("पंजीकरण करें" if selected_lang == "hi" else "నమోదు చేయండి"),
+            tr("sidebar.register", selected_lang),
             use_container_width=True
         )
         if submitted and name and phone:
@@ -364,31 +365,20 @@ if not st.session_state.user_registered:
                 "fuel_type": fuel_type,
             }
             st.session_state.user_registered = True
-            if selected_lang == "hi":
-                msg = f"स्वागत है, {name}! आपका फ़ोन नंबर {phone} दर्ज कर लिया गया है। आप {vehicle_type} और {fuel_type} में रुचि रखते हैं। मैं आपकी कैसे मदद कर सकता हूँ?"
-            elif selected_lang == "te":
-                msg = f"స్వాగతం, {name}! మీ ఫోన్ నంబర్ {phone} నమోదు చేయబడింది. మీరు {vehicle_type} మరియు {fuel_type} పై ఆసక్తి కలిగి ఉన్నారు. నేను మీకు ఎలా సహాయం చేయగలను?"
-            else:
-                msg = f"Welcome, {name}! Your phone number {phone} is registered. You're interested in {vehicle_type} with {fuel_type}. How can I help you today?"
+            msg = tr("chat.welcome", selected_lang, name=name, phone=phone, vehicle_type=vehicle_type, fuel_type=fuel_type)
             st.session_state.messages.append({"role": "assistant", "text": msg})
             st.rerun()
         elif submitted:
-            if selected_lang == "hi":
-                st.error("कृपया नाम और फ़ोन नंबर भरें")
-            elif selected_lang == "te":
-                st.error("దయచేసి పేరు మరియు ఫోన్ నంబర్ నింపండి")
-            else:
-                st.error("Please fill in Name and Phone Number")
+            st.error(tr("error.fill_name_phone", selected_lang))
 else:
     info = st.session_state.user_info
-    lang_text = {"en": "Registered User", "hi": "पंजीकृत उपयोगकर्ता", "te": "నమోదిత వినియోగదారు"}
-    st.sidebar.success(f"**{lang_text[selected_lang]}**")
+    st.sidebar.success(f"**{tr('sidebar.registered_user', selected_lang)}**")
     st.sidebar.write(f"👤 {info.get('name', '')}")
     st.sidebar.write(f"📞 {info.get('phone', '')}")
     st.sidebar.write(f"🚗 {info.get('vehicle_type', '')}")
     st.sidebar.write(f"⛽ {info.get('fuel_type', '')}")
     if st.sidebar.button(
-        "Edit Info" if selected_lang == "en" else ("जानकारी संपादित करें" if selected_lang == "hi" else "సమాచారాన్ని సవరించండి"),
+        tr("sidebar.edit_info", selected_lang),
         use_container_width=True
     ):
         st.session_state.user_registered = False
@@ -397,8 +387,8 @@ else:
 st.sidebar.markdown("---")
 
 vehicle_pref = st.sidebar.radio(
-    "Vehicle Preference" if selected_lang == "en" else ("वाहन प्राथमिकता" if selected_lang == "hi" else "వాహన ప్రాధాన్యత"),
-    options=["🏍️ Two Wheeler", "🚗 Four Wheeler"],
+    tr("sidebar.vehicle_pref", selected_lang),
+    options=[f"🏍️ {tr('sidebar.two_wheeler', selected_lang)}", f"🚗 {tr('sidebar.four_wheeler', selected_lang)}"],
     index=0
 )
 
@@ -424,11 +414,10 @@ if clean_pref != st.session_state.prev_vehicle_pref:
         st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-history"></i> Chat History</h3>', unsafe_allow_html=True)
+st.sidebar.markdown(f'<h3 style="font-family:Orbitron,sans-serif;color:#FF0055;text-transform:uppercase"><i class="fas fa-history"></i> {tr("sidebar.chat_history", selected_lang)}</h3>', unsafe_allow_html=True)
 
 if len(st.session_state.messages) > 1:
-    save_text = "Save Chat to History" if selected_lang == "en" else ("चैट इतिहास में सहेजें" if selected_lang == "hi" else "చాట్ ను చరిత్రలో సేవ్ చేయండి")
-    if st.sidebar.button(f"💾 {save_text}", use_container_width=True):
+    if st.sidebar.button(f"💾 {tr('sidebar.save_chat', selected_lang)}", use_container_width=True):
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         first_query = "Vehicle Inquiry"
         for m in st.session_state.messages:
@@ -440,11 +429,11 @@ if len(st.session_state.messages) > 1:
             "messages": list(st.session_state.messages),
             "pref": clean_pref
         })
-        st.toast("Chat saved to history!" if selected_lang == "en" else ("चैट सहेजा गया!" if selected_lang == "hi" else "చాట్ సేవ్ చేయబడింది!"))
+        st.toast(tr("chat.saved_toast", selected_lang))
         st.rerun()
 
 if st.session_state.history:
-    with st.sidebar.expander("Saved Chats" if selected_lang == "en" else ("सहेजे गए चैट" if selected_lang == "hi" else "సేవ్ చేసిన చాట్‌లు"), expanded=True):
+    with st.sidebar.expander(tr("sidebar.saved_chats", selected_lang), expanded=True):
         for idx, session in enumerate(st.session_state.history):
             col_load, col_del = st.columns([5, 1])
             if col_load.button(session["title"], key=f"load_{idx}", use_container_width=True):
@@ -455,22 +444,16 @@ if st.session_state.history:
                 st.session_state.history.pop(idx)
                 st.rerun()
 else:
-    no_chats_text = "No saved chats yet." if selected_lang == "en" else ("अभी तक कोई सहेजा गया चैट नहीं है।" if selected_lang == "hi" else "ఇంకా సేవ్ చేసిన చాట్‌లు లేవు.")
-    st.sidebar.caption(no_chats_text)
+    st.sidebar.caption(tr("sidebar.no_saved_chats", selected_lang))
 
 if len(st.session_state.messages) > 1:
     st.sidebar.markdown("---")
-    clear_text = "Clear Current Chat" if selected_lang == "en" else ("वर्तमान चैट साफ़ करें" if selected_lang == "hi" else "ప్రస్తుత చాట్‌ను క్లియర్ చేయండి")
-    if st.sidebar.button(f"🗑️ {clear_text}", use_container_width=True):
+    if st.sidebar.button(f"🗑️ {tr('sidebar.clear_chat', selected_lang)}", use_container_width=True):
         st.session_state.messages = [{"role": "assistant", "text": get_greeting(clean_pref, selected_lang)}]
         st.rerun()
 
 vehicle_icon = '<i class="fas fa-motorcycle"></i>' if clean_pref == "Two Wheeler" else '<i class="fas fa-car"></i>'
-system_label = "SYSTEM SCANNING"
-if selected_lang == "hi":
-    system_label = "सिस्टम स्कैन कर रहा है"
-elif selected_lang == "te":
-    system_label = "సిస్టమ్ స్కాన్ చేస్తోంది"
+system_label = tr("system.scanning", selected_lang)
 track_label = f"{system_label}: {clean_pref.upper()} INTERFACE"
 
 st.markdown(
@@ -492,13 +475,13 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["text"])
 
-user_input = st.chat_input("Ask for advice or tell me your budget and preferences...")
+user_input = st.chat_input(tr("chat.placeholder", selected_lang))
 
 if user_input:
     user_info = st.session_state.get("user_info")
     ai_mode = st.session_state.get("ai_mode", "rule")
     if ai_mode == "ollama":
-        with st.spinner("🤖 AI is thinking..." if selected_lang == "en" else ("🤖 AI सोच रहा है..." if selected_lang == "hi" else "🤖 AI ఆలోచిస్తోంది...")):
+        with st.spinner(f"🤖 {tr('chat.thinking', selected_lang)}"):
             output = generate_response(user_input, clean_pref, selected_lang, user_info, ai_mode)
     else:
         output = generate_response(user_input, clean_pref, selected_lang, user_info, ai_mode)
